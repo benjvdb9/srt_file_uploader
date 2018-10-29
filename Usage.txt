@@ -1,0 +1,6 @@
+#Heroku CLI required
+
+cmd> heroku login
+...
+
+cmd> heroku 
