@@ -3,4 +3,4 @@
 cmd> heroku login
 ...
 
-cmd> heroku 
+cmd> git push heroku master

@@ -104,13 +104,14 @@ class Mixer:
     def closeFile(self):
         self.sub3.close()
 
+Mixer('SubsEN.srt', 'SubsCN.srt')
+
 @route('/')
 def show_def():
-    return static_file('SubsEN.srt', root=('.'))
+    return static_file('SubsMix.srt', root=('.'))
 
 if os.environ.get('APP_LOCATION') == 'heroku':
     run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
-    print('Hello')
+    
 else:
-    #run(host='localhost', port=8080)
-    Mixer('SubsEN.srt', 'SubsCN.srt')
+    run(host='localhost', port=8080)
