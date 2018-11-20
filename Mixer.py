@@ -3,9 +3,10 @@ import io
 import datetime as dt
 
 class Subs():
-    def __init__(self, subfile):
+    def __init__(self, subfile, delta=dt.timedelta(0)):
         self.__subfile = io.open(subfile, mode='r', encoding='utf-8')
         self.subs = []
+        self.delta = delta
         self.getSubs()
         self.closeFile()
 
@@ -13,7 +14,7 @@ class Subs():
         line_buffer = []
         for line in self.__subfile:
             if line == '\n' and len(line_buffer) > 2:
-                line_sub = Sub(line_buffer)
+                line_sub = Sub(line_buffer, self.delta)
                 self.subs += [line_sub]
                 line_buffer = []
             else:
@@ -26,15 +27,18 @@ class Subs():
         return len(self.subs)
 
 class Sub():
-    def __init__(self, sublist):
+    def __init__(self, sublist, delta=dt.timedelta(0)):
         self.sublist = sublist
+        self.delta = delta
         self.timestamp = sublist[1]
         self.content = sublist[2:]
-        self.time = self.getTime()
+        self.deltastamp = self.getTime()
+        self.time = self.convertTime(self.deltastamp[0])
+        self.correctTimestamp()
 
     def getTime(self):
         matchObj = re.match(r'(.*) --> (.*)', self.timestamp)
-        return self.convertTime(matchObj.group(1))
+        return matchObj.group(1, 2)
 
     def convertTime(self, time):
         pattern = re.compile(r'(.*):(.*):(.*)')
@@ -44,16 +48,56 @@ class Sub():
         tvalues = tuple(float(tvalues[elm].replace(',', '.'))
                         for elm in range(len(tvalues)))
 
-        t = dt.timedelta(hours= tvalues[0], minutes= tvalues[1], seconds= tvalues[2])
-        x = t.total_seconds()
+        mseconds = tvalues[2] - int(tvalues[2])
+        tvalues = tvalues[:2] + (float(int(tvalues[2])),)
+        tvalues += (int(mseconds*1000),)
 
-        return dt.timedelta(hours= tvalues[0],
-                            minutes= tvalues[1], seconds= tvalues[2])
+        t = dt.timedelta(hours= tvalues[0], minutes= tvalues[1],
+                         seconds= tvalues[2], milliseconds= tvalues[3])
+        
+        t += self.delta
+        return t
+
+    def correctTimestamp(self):
+        endtime = self.convertTime(self.deltastamp[1])
+        string_stime = self.timeToString(self.time)
+        string_etime = self.timeToString(endtime)
+        new_timestamp = '{} --> {}\n'.format(string_stime, string_etime)
+        self.timestamp = new_timestamp
+
+    def timeToString(self, timedelta):
+        mseconds = self.toRstCompatible1000(timedelta.microseconds // 1000)
+        secs = self.toRstCompatible(timedelta.seconds % 60)
+        seconds = '{},{}'.format(secs, mseconds)
+        minutes = self.toRstCompatible((timedelta.seconds // 60) % 60)
+        hours = self.toRstCompatible(timedelta.seconds // 3600)
+        time = '{}:{}:{}'.format(hours, minutes, seconds)
+        return time
+
+    def toRstCompatible(self, num):
+        hundreds = num // 100
+        tens = num // 10
+        if tens == 0:
+            return '0' + str(num)
+        else:
+            return str(num)
+
+    def toRstCompatible1000(self, num):
+        hundreds = num // 100
+        tens = num // 10
+        if hundreds == 0:
+            if tens == 0:
+                return '00' + str(num)
+            else:
+                return '0' +str(num)
+        else:
+            return str(num)
+            
 
 class Mixer:
-    def __init__(self, sub1, sub2):
+    def __init__(self, sub1, sub2, delta):
         self.sub1 = Subs(sub1)
-        self.sub2 = Subs(sub2)
+        self.sub2 = Subs(sub2, delta)
         self.sub3 = io.open('SubMix.srt', mode='w', encoding='utf-8')
         self.organize()
         self.closeFile()
@@ -80,12 +124,18 @@ class Mixer:
         
         for elm in range(size):
             self.sub3.write(str(elm + 1) + '\n')
-            try:
-                time2 = subs2[pointer2].time
-            except:
-                time2 = dt.timedelta(days=1)
+            
+            if pointer1 == len(subs1):
+                time1 = dt.timedelta(days=1)
+            else:
+                time1 = subs1[pointer1].time
                 
-            if subs1[pointer1].time < time2:
+            if pointer2 == len(subs2):
+                time2 = dt.timedelta(days=1)
+            else:
+                time2 = subs2[pointer2].time
+                
+            if time1 <= time2:
                 current_sub = subs1[pointer1]
                 pointer1 += 1
             else:
@@ -101,4 +151,6 @@ class Mixer:
     def closeFile(self):
         self.sub3.close()
 
-Mixer('SubsEN.srt', 'SubsCN.srt')
+timedelta = dt.timedelta(seconds=31, milliseconds=933)
+#timedelta = dt.timedelta(0)
+Mixer('SubsEN.srt', 'SubsCN.srt', timedelta)
